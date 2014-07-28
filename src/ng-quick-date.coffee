@@ -5,12 +5,16 @@
 #
 # Source Code: https://github.com/adamalbrecht/ngQuickDate
 #
+# Updated to append to body and reuse a singe element by Wyatt Nielsen
+#
+# Source: https://github.com/WyattNielsen/ngQuickDate.git
+#
 # Compatible with Angular 1.2.0+
 #
 
-app = angular.module("ngMyQuickDate", [])
+app = angular.module("ngQuickDate", [])
 
-app.provider "ngMyQuickDate", ->
+app.provider "ngQuickDate", ->
   quickDate: null
   options:
     dateFormat: 'M/d/yyyy'
@@ -198,7 +202,6 @@ class @QuickDate
   # Set the date that is used by the calendar to determine which month to show
   # Defaults to the current month
   setCalendarDate: (val=null) ->
-#    val = @selectedDate unless val?
     if val?
       d = new Date(val)
     else
@@ -250,9 +253,6 @@ class @QuickDate
     if closeCalendar
       @close(false)
     true
-
-  # getDate: ->
-  #   @calendarDate
 
   focusOnDatePicker: (element)->
     dateInput = angular.element(element[0].querySelector(".quickdate-date-input"))[0]
@@ -309,10 +309,6 @@ class @QuickDate
     else
       d1 && d2 && (d1.getYear() == d2.getYear()) && (d1.getMonth() == d2.getMonth()) && (d1.getDate() == d2.getDate())
 
-  # datesAreEqualToMinute = (d1, d2) ->
-  #   return false unless d1 && d2
-  #   parseInt(d1.getTime() / 60000) == parseInt(d2.getTime() / 60000)
-
   calcPosition: (element) ->
     xPosition = 0
     yPosition = 0
@@ -351,16 +347,17 @@ class @QuickDate
 
 #===============================  Directive =================================
 
-app.directive "ngMyQuickDate", ['ngMyQuickDate', '$filter', '$sce', (ngMyQuickDate, $filter, $sce) ->
+app.directive "ngQuickDate", ['ngQuickDate', '$filter', '$sce', (ngQuickDate, $filter, $sce) ->
   restrict: "E"
   require: "?ngModel"
   scope:
+    ngModel: "="
     dateFilter: '=?'
     onChange: "&"
     required: '@'
   template: """
     <div class='quickdate'>
-      <a href='' ng-focus='showCalendar()' ng-click='showCalendar()' class='quickdate-button' title='{{hoverText}}'><div ng-hide='iconClass' ng-bind-html='buttonIconHtml'></div>{{mainButtonStr}}</a>
+      <a href='' ng-focus='showCalendar()' ng-click='showCalendar()' class='quickdate-button' title='{{hoverText}}'><div ng-hide='iconClass' ng-bind-html='buttonIconHtml'></div>{{mainButtonStr()}}</a>
     </div>
   """
   replace: true
@@ -371,35 +368,40 @@ app.directive "ngMyQuickDate", ['ngMyQuickDate', '$filter', '$sce', (ngMyQuickDa
       if attrs.placeholder && attrs.placeholder.length
         scope.placeholder = attrs.placeholder
       else
-        scope.placeholder = ngMyQuickDate.getOption('placeholder')
+        scope.placeholder = ngQuickDate.getOption('placeholder')
       if attrs.dateFilter && attrs.dateFilter.length
         scope.dateFilter = attrs.dateFilter
       else
-        scope.dateFilter = ngMyQuickDate.getOption('dateFilter')
+        scope.dateFilter = ngQuickDate.getOption('dateFilter')
       if attrs.labelFormat && attrs.labelFormat.length
         scope.labelFormat = attrs.labelFormat
       else
-        scope.labelFormat = ngMyQuickDate.getOption('labelFormat')
+        scope.labelFormat = ngQuickDate.getOption('labelFormat')
       if attrs.hoverText && attrs.hoverText.length
         scope.hoverText = attrs.hoverText
       else
-        scope.hoverText = ngMyQuickDate.getOption('hoverText')
+        scope.hoverText = ngQuickDate.getOption('hoverText')
       if attrs.iconClass && attrs.iconClass.length
         scope.buttonIconHtml = $sce.trustAsHtml("<i ng-show='iconClass' class='#{attrs.iconClass}'></i>")
       else
-        scope.buttonIconHtml = ngMyQuickDate.getOption('buttonIconHtml')
-      scope.parseDateFunction = ngMyQuickDate.getOption('parseDateFunction')
+        scope.buttonIconHtml = ngQuickDate.getOption('buttonIconHtml')
+      scope.parseDateFunction = ngQuickDate.getOption('parseDateFunction')
 
       if typeof(attrs.initValue) == 'string'
         ngModelCtrl.$setViewValue(attrs.initValue)
       setDate(ngModelCtrl.$modelValue)
 
     scope.showCalendar = ->
-      ngMyQuickDate.open(element, scope.date, dateSelected) ##### Maybe send callback here????
+      ngQuickDate.open(element, scope.date, dateSelected) ##### Maybe send callback here????
 
-    getButtonText = ->
-      if scope.date then $filter('date')(scope.date, scope.labelFormat) else scope.placeholder
+#     getButtonText = ->
+#       if scope.date then $filter('date')(scope.date, scope.labelFormat) else scope.placeholder
 
+
+    scope.mainButtonStr = ->
+      date = if ngModelCtrl.$modelValue then new Date(ngModelCtrl.$modelValue) else null
+      if date then $filter('date')(date, scope.labelFormat) else scope.placeholder
+      
     dateSelected = (date)->
       if typeof(scope.dateFilter) == 'function' && !scope.dateFilter(date)
         return false
@@ -410,17 +412,10 @@ app.directive "ngMyQuickDate", ['ngMyQuickDate', '$filter', '$sce', (ngMyQuickDa
       scope.date = if val? then new Date(val) else new Date()
       if (scope.date.toString() == "Invalid Date")
         scope.date = null
-      scope.mainButtonStr = getButtonText()
+      #scope.mainButtonStr = getButtonText()
       scope.invalid = ngModelCtrl.$invalid
       true
-
-    # Called when the model is updated from inside the datepicker,
-    # either by clicking a calendar date, setting an input, etc
-    ngModelCtrl.$viewChangeListeners.unshift ->
-      setDate(ngModelCtrl.$viewValue)
-    # if scope.onChange
-    #   scope.onChange()
-
+      
     # PARSERS AND FORMATTERS
     # =================================
     # When the model is set from within the datepicker, this will be run
@@ -454,12 +449,16 @@ app.directive "ngMyQuickDate", ['ngMyQuickDate', '$filter', '$sce', (ngMyQuickDa
     ngModelCtrl.$render = ->
       setDate(ngModelCtrl.$viewValue)
 
-#    # Called when the model is updated from inside the datepicker,
-#    # either by clicking a calendar date, setting an input, etc
-#    ngModelCtrl.$viewChangeListeners.unshift ->
-#      setDate(ngModelCtrl.$viewValue)
-##      if scope.onChange
-##        scope.onChange()
+    # Called when the model is updated from inside the datepicker,
+    # either by clicking a calendar date, setting an input, etc
+    ngModelCtrl.$viewChangeListeners.unshift ->
+      setDate(ngModelCtrl.$viewValue)
+    #      if scope.onChange
+    #        scope.onChange()
+
+    scope.$watch('ngModel', (newVal, oldVal) ->
+      setDate(newVal)
+    )
 
     initialize()
 
